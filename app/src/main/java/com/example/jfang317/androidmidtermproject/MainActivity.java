@@ -24,11 +24,12 @@ public class MainActivity extends AppCompatActivity {
     // Google direction API url & key
     String dir_api = "https://maps.googleapis.com/maps/api/directions/json?";
     String geo_api = "https://maps.googleapis.com/maps/api/geocode/json?";
-    String key = "AIzaSyBtOZUrmoncqHCQBiwmU6FTvD1ULPKZNYc";
+    private String key = "AIzaSyBtOZUrmoncqHCQBiwmU6FTvD1ULPKZNYc";
 
     // List of route data to display
-    ArrayList<Map<String, Object>> route_list = new ArrayList<>();
-    Map<String, Object> overall = new HashMap<>();
+    protected ArrayList<Map<String, Object>> route_list = new ArrayList<>();
+    protected Map<String, Object> overall = new HashMap<>();
+    protected ArrayList<String> polyline = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -80,7 +81,7 @@ public class MainActivity extends AppCompatActivity {
                     .getJSONObject(0);
             JSONArray steps = legs.getJSONArray("steps");
 
-            // Get start/end location data
+            // Get and store start/end location data & total duration,
             LatLng start_location = new LatLng(legs.getJSONObject("start_location").optDouble("lat"),
                     legs.getJSONObject("start_location").optDouble("lng"));
             LatLng end_location = new LatLng(legs.getJSONObject("end_location").optDouble("lat"),
@@ -88,7 +89,6 @@ public class MainActivity extends AppCompatActivity {
             String start_address = legs.getString("start_address");
             String end_address = legs.getString("end_address");
             String duration = legs.getJSONObject("duration").getString("text");
-
             overall.put("start_address", start_address);
             overall.put("end_address", end_address);
             overall.put("duration", duration);
@@ -102,6 +102,8 @@ public class MainActivity extends AppCompatActivity {
                     (steps.getJSONObject(0).getString("travel_mode").equals("WALKING"))) {
                 // Ubike all the way QQ
             }
+
+            // Handling different responding cases of JSON
             for (int i = 0; i < steps.length(); i++) {
                 if (steps.getJSONObject(i).getString("travel_mode").equals("WALKING")) {
                     if (steps.getJSONObject(i).has("steps")) {
@@ -109,6 +111,7 @@ public class MainActivity extends AppCompatActivity {
                         for (int j = 0; j < step_index.length(); j++) {
                             Map<String, Object> index = new HashMap<>();
 
+                            // Get/Form html instructions
                             if (step_index.getJSONObject(j).has("html_instructions")) {
                                 String html_instructions = step_index
                                         .getJSONObject(j)
@@ -129,17 +132,26 @@ public class MainActivity extends AppCompatActivity {
                                 index.put("html_instructions", html_instructions);
                             }
 
+                            // Get travel mode
                             String travel_mode = step_index
                                     .getJSONObject(j)
                                     .getString("travel_mode");
                             index.put("travel_mode", travel_mode);
 
+                            // Get polyline
+                            String points = step_index
+                                    .getJSONObject(j)
+                                    .getJSONObject("polyline")
+                                    .getString("points");
+                            polyline.add(points);
+
                             route_list.add(index);
-                            Log.v("LOOP", Integer.toString(j));
+                            //Log.v("LOOP", Integer.toString(j));
                         }
                     } else {
                         Map<String, Object> index = new HashMap<>();
 
+                        // Get html instructions
                         String html_instructions = steps
                                 .getJSONObject(i)
                                 .getString("html_instructions");
@@ -149,8 +161,16 @@ public class MainActivity extends AppCompatActivity {
                                 .replaceAll("開", "走");
                         index.put("html_instructions", html_instructions);
 
+                        // Get travel mode
                         String travel_mode = steps.getJSONObject(i).getString("travel_mode");
                         index.put("travel_mode", travel_mode);
+
+                        // Get polyline
+                        String points = steps
+                                .getJSONObject(i)
+                                .getJSONObject("polyline")
+                                .getString("points");
+                        polyline.add(points);
 
                         route_list.add(index);
                     }
@@ -191,6 +211,12 @@ public class MainActivity extends AppCompatActivity {
                                     .getString("type");
                             index.put("travel_mode", travel_mode);
 
+                            String points = step_index
+                                    .getJSONObject(j)
+                                    .getJSONObject("polyline")
+                                    .getString("points");
+                            polyline.add(points);
+
                             route_list.add(index);
                         }
                     } else {
@@ -226,6 +252,12 @@ public class MainActivity extends AppCompatActivity {
                                 .getJSONObject("vehicle")
                                 .getString("type");
                         index.put("travel_mode", travel_mode);
+
+                        String points = steps
+                                .getJSONObject(i)
+                                .getJSONObject("polyline")
+                                .getString("points");
+                        polyline.add(points);
 
                         route_list.add(index);
                     }
@@ -353,6 +385,9 @@ public class MainActivity extends AppCompatActivity {
             for (Map.Entry entry : route_list.get(i).entrySet()) {
                 Log.v("DATA", entry.getValue().toString());
             }
+        }
+        for (int i = 0; i < polyline.size(); i++) {
+            Log.v("DATA", polyline.get(i));
         }
     }
 
