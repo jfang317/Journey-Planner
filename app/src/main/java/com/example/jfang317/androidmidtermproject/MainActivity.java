@@ -2,21 +2,19 @@ package com.example.jfang317.androidmidtermproject;
 
 import android.Manifest;
 import android.app.AlertDialog;
+import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.SQLException;
-import android.location.Criteria;
-import android.location.Location;
-import android.location.LocationListener;
-import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.provider.Settings;
-import android.support.v4.app.ActivityCompat;
+import android.support.annotation.NonNull;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.text.Html;
 import android.util.Log;
@@ -29,7 +27,6 @@ import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.ListView;
 import android.widget.TextView;
-import android.widget.Toast;
 
 import com.google.android.gms.maps.model.LatLng;
 
@@ -45,8 +42,7 @@ import java.util.Map;
 import static android.location.Location.distanceBetween;
 
 
-public class MainActivity extends AppCompatActivity
-        implements LocationListener{
+public class MainActivity extends AppCompatActivity {
 
     // layout components
     private Button btnGetLocation1 = null;
@@ -56,19 +52,15 @@ public class MainActivity extends AppCompatActivity
     private EditText editLocation1 = null;
     private EditText editLocation2 = null;
 
-    private static final int REQUEST_FINE_LOCATION_PERMISSION = 102;
-    private LocationManager lms;
-    private Location location;
-    private LocationListener listener;
-    private String bestProvider = LocationManager.NETWORK_PROVIDER;
-    private Boolean getService = false;
-
-    private String longitude_txt;
-    private String latitude_txt;
+    private String location_txt;
     private String start_txt;
     private String end_txt;
 
     private ListView mListView;
+    private BroadcastReceiver broadcastReceiver;
+
+    private boolean flag1 = false;
+    private boolean flag2 = false;
 
     // Google direction API url & key
     String dir_api = "https://maps.googleapis.com/maps/api/directions/json?";
@@ -99,6 +91,8 @@ public class MainActivity extends AppCompatActivity
         mListView = (ListView) findViewById(R.id.list);
         mListView.setVisibility(View.INVISIBLE);
 
+        if(!runtime_permissions())
+            enable_gps();
     }
 
     public void search(View view) {
@@ -114,35 +108,6 @@ public class MainActivity extends AppCompatActivity
         end_txt = editLocation2.getText().toString();
 
         sendRequest(start_txt, end_txt);
-
-    }
-
-    public void buttonClick1(View view) {
-        LocationManager status = (LocationManager) (this.getSystemService(Context.LOCATION_SERVICE));
-        if (status.isProviderEnabled(LocationManager.GPS_PROVIDER) || status.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-            //如果GPS或網路定位開啟，呼叫locationServiceInitial()更新位置
-            locationServiceInitial();
-        } else {
-            Toast.makeText(this, "請開啟定位服務", Toast.LENGTH_LONG).show();
-            getService = true; //確認開啟定位服務
-            startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)); //開啟設定頁面
-        }
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return;
-        }
-        location = lms.getLastKnownLocation(bestProvider);
-        if (location == null) location = lms.getLastKnownLocation("network");
-        if (location == null) location = lms.getLastKnownLocation("gps");
-
-        getLocation(location);
-        editLocation1.setText(latitude_txt+","+longitude_txt);
     }
 
     public void showmap(View view){
@@ -156,147 +121,14 @@ public class MainActivity extends AppCompatActivity
         startActivity(intent);
     }
 
+    public void buttonClick1(View view) {
+        flag1 = true;
+        editLocation1.setText(location_txt);
+    }
+
     public void buttonClick2(View view) {
-        LocationManager status = (LocationManager) (this.getSystemService(Context.LOCATION_SERVICE));
-        if (status.isProviderEnabled(LocationManager.GPS_PROVIDER) || status.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
-            //如果GPS或網路定位開啟，呼叫locationServiceInitial()更新位置
-            locationServiceInitial();
-        } else {
-            Toast.makeText(this, "請開啟定位服務", Toast.LENGTH_LONG).show();
-            getService = true; //確認開啟定位服務
-            startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)); //開啟設定頁面
-        }
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return;
-        }
-        location = lms.getLastKnownLocation(bestProvider);
-        if(location == null)location = lms.getLastKnownLocation("network");
-        if(location == null)location = lms.getLastKnownLocation("gps");
-
-        getLocation(location);
-        editLocation2.setText(latitude_txt+","+longitude_txt);
-    }
-
-    private void locationServiceInitial() {
-        lms = (LocationManager) getSystemService(LOCATION_SERVICE); //取得系統定位服務
-        Criteria criteria = new Criteria();  //資訊提供者選取標準
-        bestProvider = lms.getBestProvider(criteria, true);    //選擇精準度最高的提供者
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            requestLocationPermission();
-            //return;
-        }
-        location = lms.getLastKnownLocation(bestProvider);
-        if(location == null)location = lms.getLastKnownLocation("network");
-        if(location == null)location = lms.getLastKnownLocation("gps");
-
-        getLocation(location);
-    }
-
-    private void requestLocationPermission() {
-        // 如果裝置版本是6.0（包含）以上
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            // 取得授權狀態，參數是請求授權的名稱
-            int hasPermission = checkSelfPermission(
-                    Manifest.permission.ACCESS_FINE_LOCATION);
-
-            // 如果未授權
-            if (hasPermission != PackageManager.PERMISSION_GRANTED) {
-                // 請求授權
-                //     第一個參數是請求授權的名稱
-                //     第二個參數是請求代碼
-                requestPermissions(
-                        new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
-                        REQUEST_FINE_LOCATION_PERMISSION);
-            }
-            else {
-                // 啟動地圖與定位元件
-
-            }
-        }
-    }
-
-    private void getLocation(Location location) {
-        if(location != null) {
-            Double longitude = location.getLongitude();   //取得經度
-            Double latitude = location.getLatitude();     //取得緯度
-            longitude_txt = String.valueOf(longitude);
-            latitude_txt = String.valueOf(latitude);
-        }
-        else {
-            Toast.makeText(this, "無法定位座標", Toast.LENGTH_LONG).show();
-        }
-    }
-
-    @Override
-    public void onLocationChanged(Location location) {  //當地點改變時
-        // TODO 自動產生的方法 Stub
-        getLocation(location);
-    }
-
-    @Override
-    public void onProviderDisabled(String arg0) {//當GPS或網路定位功能關閉時
-        // TODO 自動產生的方法 Stub
-        //Toast.makeText(this, "請開啟gps或3G網路", Toast.LENGTH_LONG).show();
-    }
-
-    @Override
-    public void onProviderEnabled(String arg0) { //當GPS或網路定位功能開啟
-        // TODO 自動產生的方法 Stub
-    }
-
-    @Override
-    public void onStatusChanged(String arg0, int arg1, Bundle arg2) { //定位狀態改變
-        // TODO 自動產生的方法 Stub
-    }
-
-    @Override
-    protected void onResume() {
-        // TODO Auto-generated method stub
-        super.onResume();
-        if (getService) {
-            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-                // TODO: Consider calling
-                //    ActivityCompat#requestPermissions
-                // here to request the missing permissions, and then overriding
-                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-                //                                          int[] grantResults)
-                // to handle the case where the user grants the permission. See the documentation
-                // for ActivityCompat#requestPermissions for more details.
-                requestLocationPermission();
-                return;
-            }
-            lms.requestLocationUpdates(bestProvider, 1000, 1, this);
-            //服務提供者、更新頻率60000毫秒=1分鐘、最短距離、地點改變時呼叫物件
-        }
-    }
-
-    @Override
-    protected void onPause() {
-        // TODO Auto-generated method stub
-        super.onPause();
-        if(getService) {
-            //lms.removeUpdates(this);	//離開頁面時停止更新
-        }
-    }
-
-    protected void onDestroy() {
-        lms.removeUpdates(listener);
-        lms.setTestProviderEnabled(bestProvider, false);
-        super.onDestroy();
+        flag2 = true;
+        editLocation2.setText(location_txt);
     }
 
     private class MyAdapter extends BaseAdapter {
@@ -352,17 +184,66 @@ public class MainActivity extends AppCompatActivity
         }
     }
 
+    @Override
+    protected void onResume() {
+        super.onResume();
+        if(broadcastReceiver == null){
+            broadcastReceiver = new BroadcastReceiver() {
+                @Override
+                public void onReceive(Context context, Intent intent) {
+                    location_txt = intent.getExtras().get("coordinates").toString();
+                }
+            };
+        }
+        registerReceiver(broadcastReceiver,new IntentFilter("location_update"));
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if(broadcastReceiver != null){
+            unregisterReceiver(broadcastReceiver);
+        }
+    }
+
+    private void enable_gps() {
+        Intent i =new Intent(getApplicationContext(),GPS_Service.class);
+        startService(i);
+    }
+
+    private boolean runtime_permissions() {
+        if(Build.VERSION.SDK_INT >= 23 && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED){
+
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION},100);
+
+            return true;
+        }
+        return false;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if(requestCode == 100){
+            if( grantResults[0] == PackageManager.PERMISSION_GRANTED && grantResults[1] == PackageManager.PERMISSION_GRANTED){
+                enable_gps();
+            }else {
+                runtime_permissions();
+            }
+        }
+    }
+
     private void sendRequest(String origin, String destination) {
         // Setup request parameters
         //String origin = "24.784931,120.991764";
         //String origin = "台南車站";
-        origin = "300新竹市東區新源街138號";
+        //origin = "300新竹市東區新源街138號";
         //String destination = "24.800164,120.979457";
         //tring destination = "300台灣新竹市東區大學路68號";
-        destination = "300新竹市東區大學路200號";
+        //destination = "302台灣新竹縣竹北市高鐵七路6號";
         String travel_mode = "transit";
-        //String departure_time = "now";
-        String departure_time = "1491771600";
+        String departure_time = "now";
+        //String departure_time = "1491771600";
         String language = "zh-TW";
 
         // Build request url
@@ -616,19 +497,49 @@ public class MainActivity extends AppCompatActivity
                         route_list.add(index);
                     }
                 }
+            }/*
+            for (int i = 0; i < steps_list.size(); i++) {
+                for (Map.Entry entry : steps_list.get(i).entrySet()) {
+                    Log.v("YO", entry.getValue().toString());
+                }
             }
+            for (int i = 0; i < route_list.size(); i++) {
+                for (Map.Entry entry : route_list.get(i).entrySet()) {
+                    Log.v("YO", entry.getValue().toString());
+                }
+            }*/
             ubikePartOpt();
         } catch (JSONException e) {
             try {
-                String start_id = new JSONObject(data)
-                        .getJSONArray("geocoded_waypoints")
-                        .getJSONObject(0)
-                        .getString("place_id");
-                String end_id = new JSONObject(data)
-                        .getJSONArray("geocoded_waypoints")
-                        .getJSONObject(1)
-                        .getString("place_id");
-                zeroResults(start_id, end_id);
+                if (flag1 && flag2) {
+                    zeroResults(start_txt, end_txt);
+                } else if (!flag1 && flag2) {
+                    String start_id = new JSONObject(data)
+                            .getJSONArray("geocoded_waypoints")
+                            .getJSONObject(0)
+                            .getString("place_id");
+                    start_id = "place_id:" + start_id;
+                    zeroResults(start_id, end_txt);
+                } else if (flag1 && !flag2) {
+                    String end_id = new JSONObject(data)
+                            .getJSONArray("geocoded_waypoints")
+                            .getJSONObject(1)
+                            .getString("place_id");
+                    end_id = "place_id:" + end_id;
+                    zeroResults(start_txt, end_id);
+                } else {
+                    String start_id = new JSONObject(data)
+                            .getJSONArray("geocoded_waypoints")
+                            .getJSONObject(0)
+                            .getString("place_id");
+                    String end_id = new JSONObject(data)
+                            .getJSONArray("geocoded_waypoints")
+                            .getJSONObject(1)
+                            .getString("place_id");
+                    start_id = "place_id:" + start_id;
+                    end_id = "place_id:" + end_id;
+                    zeroResults(start_id, end_id);
+                }
             } catch (JSONException j) {
                 Log.v("JSON", "1");
                 errorMsg("Error", "unexpected response data");
@@ -709,6 +620,37 @@ public class MainActivity extends AppCompatActivity
 
         String ubike_start = getUbikeGps(start_location);
         String ubike_end = getUbikeGps(end_location);
+
+        if (ubike_start.equals(ubike_end)) {/*
+            Log.d("UBIKE", ubike_start);
+            Log.d("UBIKE", ubike_end);
+            Log.d("UBIKE", Integer.toString((Integer) steps_list.get(0).get("count")));
+            for (int i = 0; i < steps_list.size(); i++) {
+                for (Map.Entry entry : steps_list.get(i).entrySet()) {
+                    Log.v("DATA", entry.getValue().toString());
+                }
+            }
+            for (int i = 0; i < route_list.size(); i++) {
+                for (Map.Entry entry : route_list.get(i).entrySet()) {
+                    Log.v("YO", entry.getValue().toString());
+                }
+            }*/
+
+            for (int i = 0; i < (Integer) steps_list.get(0).get("count"); i++) {
+                final_list.add(route_list.get(0));
+                final_polyline.add(route_polyline.get(0));
+                route_list.remove(0);
+                route_polyline.remove(0);
+            }
+            steps_list.remove(0);
+
+            if (steps_list.size() == 0) {
+                printList();
+                return;
+            } else {
+                ubikePartOpt();
+            }
+        }
 
         Uri.Builder builder1 = Uri.parse(dir_api).buildUpon();
         builder1.appendQueryParameter("origin", start)
@@ -951,24 +893,33 @@ public class MainActivity extends AppCompatActivity
         if (time < (Integer) steps_list.get(0).get("duration")) {
             final_list.addAll(ubike_list);
             final_polyline.addAll(ubike_polyline);
+            for (int i = 0; i < (Integer) steps_list.get(0).get("count"); i++) {
+                route_list.remove(0);
+                route_polyline.remove(0);
+            }
         } else {
             for (int i = 0; i < (Integer) steps_list.get(0).get("count"); i++) {
                 final_list.add(route_list.get(0));
                 final_polyline.add(route_polyline.get(0));
+                route_list.remove(0);
+                route_polyline.remove(0);
             }
         }
-        for (int i = 0; i < (Integer) steps_list.get(0).get("count"); i++) {
-            route_list.remove(0);
-            route_polyline.remove(0);
-        }
-        steps_list.remove(0);
+        steps_list.remove(0);/*
         for (int i = 0; i < steps_list.size(); i++) {
             for (Map.Entry entry : steps_list.get(i).entrySet()) {
                 Log.v("DATA", entry.getValue().toString());
             }
         }
-        Log.v("DATA", "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
-        if (steps_list.size() == 0) printList();
+        for (int i = 0; i < route_list.size(); i++) {
+            for (Map.Entry entry : route_list.get(i).entrySet()) {
+                Log.v("YO", entry.getValue().toString());
+            }
+        }
+        Log.v("DATA", "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");*/
+        if (steps_list.size() == 0){
+            printList();
+        }
         else ubikePartOpt();
     }
 
