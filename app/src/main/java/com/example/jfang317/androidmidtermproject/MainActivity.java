@@ -114,6 +114,7 @@ public class MainActivity extends AppCompatActivity
         end_txt = editLocation2.getText().toString();
 
         sendRequest(start_txt, end_txt);
+
     }
 
     public void buttonClick1(View view) {

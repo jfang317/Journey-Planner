@@ -2,6 +2,7 @@ package com.example.jfang317.androidmidtermproject;
 
 import org.junit.Test;
 
+import static junit.framework.Assert.assertEquals;
 import static org.junit.Assert.*;
 
 /**
