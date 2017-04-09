@@ -29,4 +29,5 @@ dependencies {
     compile 'com.android.support:appcompat-v7:24.2.1'
     compile 'com.android.support.constraint:constraint-layout:1.0.0-alpha8'
     compile 'com.google.android.gms:play-services-maps:10.2.1'
+    compile 'com.google.maps.android:android-maps-utils:0.4+'
 }

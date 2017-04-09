@@ -1,4 +1,9 @@
 <resources>
     <string name="app_name">Android Midterm Project</string>
     <string name="title_activity_maps">Map</string>
+    <string name="edit_message">起始位置</string>
+    <string name="button_send">使用目前位置</string>
+    <string name="edit_message2">終點位置</string>
+    <string name="button_search">搜尋</string>
+    <string name="button_map">地圖</string>
 </resources>

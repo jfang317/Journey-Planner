@@ -1,14 +1,35 @@
 package com.example.jfang317.androidmidtermproject;
 
+import android.Manifest;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.DialogInterface;
+import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.database.SQLException;
+import android.location.Criteria;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
+import android.provider.Settings;
+import android.support.v4.app.ActivityCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.text.Html;
 import android.util.Log;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.BaseAdapter;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.ImageView;
+import android.widget.ListView;
+import android.widget.TextView;
+import android.widget.Toast;
 
 import com.google.android.gms.maps.model.LatLng;
 
@@ -24,7 +45,30 @@ import java.util.Map;
 import static android.location.Location.distanceBetween;
 
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity
+        implements LocationListener{
+
+    // layout components
+    private Button btnGetLocation1 = null;
+    private Button btnGetLocation2 = null;
+    private Button btnSearch = null;
+    private Button btnshowmap= null;
+    private EditText editLocation1 = null;
+    private EditText editLocation2 = null;
+
+    private static final int REQUEST_FINE_LOCATION_PERMISSION = 102;
+    private LocationManager lms;
+    private Location location;
+    private LocationListener listener;
+    private String bestProvider = LocationManager.NETWORK_PROVIDER;
+    private Boolean getService = false;
+
+    private String longitude_txt;
+    private String latitude_txt;
+    private String start_txt;
+    private String end_txt;
+
+    private ListView mListView;
 
     // Google direction API url & key
     String dir_api = "https://maps.googleapis.com/maps/api/directions/json?";
@@ -47,27 +91,285 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        sendRequest();
+        editLocation1 = (EditText) findViewById(R.id.editText1);
+        btnGetLocation1 = (Button) findViewById(R.id.button);
+        editLocation2 = (EditText) findViewById(R.id.editText2);
+        btnGetLocation2 = (Button) findViewById(R.id.button2);
+        btnshowmap = (Button) findViewById(R.id.button4);
+        mListView = (ListView) findViewById(R.id.list);
+        mListView.setVisibility(View.INVISIBLE);
+
     }
 
-    private void sendRequest() {
+    public void search(View view) {
+        route_list.clear();
+        steps_list.clear();
+        ubike_list.clear();
+        final_list.clear();
+        route_polyline.clear();
+        ubike_polyline.clear();
+        final_polyline.clear();
+        overall.clear();
+        start_txt = editLocation1.getText().toString();
+        end_txt = editLocation2.getText().toString();
+
+        sendRequest(start_txt, end_txt);
+    }
+
+    public void buttonClick1(View view) {
+        LocationManager status = (LocationManager) (this.getSystemService(Context.LOCATION_SERVICE));
+        if (status.isProviderEnabled(LocationManager.GPS_PROVIDER) || status.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+            //如果GPS或網路定位開啟，呼叫locationServiceInitial()更新位置
+            locationServiceInitial();
+        } else {
+            Toast.makeText(this, "請開啟定位服務", Toast.LENGTH_LONG).show();
+            getService = true; //確認開啟定位服務
+            startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)); //開啟設定頁面
+        }
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return;
+        }
+        location = lms.getLastKnownLocation(bestProvider);
+        if (location == null) location = lms.getLastKnownLocation("network");
+        if (location == null) location = lms.getLastKnownLocation("gps");
+
+        getLocation(location);
+        editLocation1.setText(latitude_txt+","+longitude_txt);
+    }
+
+    public void showmap(View view){
+        Intent intent = new Intent(this, MapsActivity.class);
+        intent.putStringArrayListExtra("polyline", final_polyline);
+        Bundle bundle = new Bundle();
+        LatLng start = (LatLng) overall.get("start_location");
+        LatLng end = (LatLng) overall.get("end_location");
+        bundle.putDouble("Lat", (start.latitude + end.latitude) / 2);
+        bundle.putDouble("Lng", (start.longitude + end.longitude) / 2);
+        startActivity(intent);
+    }
+
+    public void buttonClick2(View view) {
+        LocationManager status = (LocationManager) (this.getSystemService(Context.LOCATION_SERVICE));
+        if (status.isProviderEnabled(LocationManager.GPS_PROVIDER) || status.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+            //如果GPS或網路定位開啟，呼叫locationServiceInitial()更新位置
+            locationServiceInitial();
+        } else {
+            Toast.makeText(this, "請開啟定位服務", Toast.LENGTH_LONG).show();
+            getService = true; //確認開啟定位服務
+            startActivity(new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS)); //開啟設定頁面
+        }
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            return;
+        }
+        location = lms.getLastKnownLocation(bestProvider);
+        if(location == null)location = lms.getLastKnownLocation("network");
+        if(location == null)location = lms.getLastKnownLocation("gps");
+
+        getLocation(location);
+        editLocation2.setText(latitude_txt+","+longitude_txt);
+    }
+
+    private void locationServiceInitial() {
+        lms = (LocationManager) getSystemService(LOCATION_SERVICE); //取得系統定位服務
+        Criteria criteria = new Criteria();  //資訊提供者選取標準
+        bestProvider = lms.getBestProvider(criteria, true);    //選擇精準度最高的提供者
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            // TODO: Consider calling
+            //    ActivityCompat#requestPermissions
+            // here to request the missing permissions, and then overriding
+            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+            //                                          int[] grantResults)
+            // to handle the case where the user grants the permission. See the documentation
+            // for ActivityCompat#requestPermissions for more details.
+            requestLocationPermission();
+            //return;
+        }
+        location = lms.getLastKnownLocation(bestProvider);
+        if(location == null)location = lms.getLastKnownLocation("network");
+        if(location == null)location = lms.getLastKnownLocation("gps");
+
+        getLocation(location);
+    }
+
+    private void requestLocationPermission() {
+        // 如果裝置版本是6.0（包含）以上
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            // 取得授權狀態，參數是請求授權的名稱
+            int hasPermission = checkSelfPermission(
+                    Manifest.permission.ACCESS_FINE_LOCATION);
+
+            // 如果未授權
+            if (hasPermission != PackageManager.PERMISSION_GRANTED) {
+                // 請求授權
+                //     第一個參數是請求授權的名稱
+                //     第二個參數是請求代碼
+                requestPermissions(
+                        new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                        REQUEST_FINE_LOCATION_PERMISSION);
+            }
+            else {
+                // 啟動地圖與定位元件
+
+            }
+        }
+    }
+
+    private void getLocation(Location location) {
+        if(location != null) {
+            Double longitude = location.getLongitude();   //取得經度
+            Double latitude = location.getLatitude();     //取得緯度
+            longitude_txt = String.valueOf(longitude);
+            latitude_txt = String.valueOf(latitude);
+        }
+        else {
+            Toast.makeText(this, "無法定位座標", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @Override
+    public void onLocationChanged(Location location) {  //當地點改變時
+        // TODO 自動產生的方法 Stub
+        getLocation(location);
+    }
+
+    @Override
+    public void onProviderDisabled(String arg0) {//當GPS或網路定位功能關閉時
+        // TODO 自動產生的方法 Stub
+        //Toast.makeText(this, "請開啟gps或3G網路", Toast.LENGTH_LONG).show();
+    }
+
+    @Override
+    public void onProviderEnabled(String arg0) { //當GPS或網路定位功能開啟
+        // TODO 自動產生的方法 Stub
+    }
+
+    @Override
+    public void onStatusChanged(String arg0, int arg1, Bundle arg2) { //定位狀態改變
+        // TODO 自動產生的方法 Stub
+    }
+
+    @Override
+    protected void onResume() {
+        // TODO Auto-generated method stub
+        super.onResume();
+        if (getService) {
+            if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+                // TODO: Consider calling
+                //    ActivityCompat#requestPermissions
+                // here to request the missing permissions, and then overriding
+                //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
+                //                                          int[] grantResults)
+                // to handle the case where the user grants the permission. See the documentation
+                // for ActivityCompat#requestPermissions for more details.
+                requestLocationPermission();
+                return;
+            }
+            lms.requestLocationUpdates(bestProvider, 1000, 1, this);
+            //服務提供者、更新頻率60000毫秒=1分鐘、最短距離、地點改變時呼叫物件
+        }
+    }
+
+    @Override
+    protected void onPause() {
+        // TODO Auto-generated method stub
+        super.onPause();
+        if(getService) {
+            //lms.removeUpdates(this);	//離開頁面時停止更新
+        }
+    }
+
+    protected void onDestroy() {
+        lms.removeUpdates(listener);
+        lms.setTestProviderEnabled(bestProvider, false);
+        super.onDestroy();
+    }
+
+    private class MyAdapter extends BaseAdapter {
+
+        @Override
+        public int getCount() {
+            return final_list.size();
+        }
+
+        @Override
+        public Object getItem(int position) {
+            return null;
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return 0;
+        }
+
+        @Override
+        public View getView(int position, View convertView, ViewGroup parent) {
+            View v = convertView;
+            Holder holder;
+            if (v == null) {
+                v = LayoutInflater.from(getApplicationContext()).inflate(R.layout.adapter, null);
+                holder = new Holder();
+                holder.image = (ImageView) v.findViewById(R.id.image);
+                holder.text = (TextView) v.findViewById(R.id.text);
+                holder.text1 = (TextView) v.findViewById(R.id.text1);
+                v.setTag(holder);
+            } else {
+                holder = (Holder) v.getTag();
+            }
+            if (final_list.get(position).get("travel_mode").equals("WALKING")) {
+                holder.image.setImageResource(R.drawable.walk);
+            } else if (final_list.get(position).get("travel_mode").equals("BUS")) {
+                holder.image.setImageResource(R.drawable.bus);
+            } else if (final_list.get(position).get("travel_mode").equals("HIGH_SPEED_TRAIN")) {
+                holder.image.setImageResource(R.drawable.speedtrain);
+            } else if (final_list.get(position).get("travel_mode").equals("HEAVY_RAIL")) {
+                holder.image.setImageResource(R.drawable.train);
+            } else if (final_list.get(position).get("travel_mode").equals("BIKE")) {
+                holder.image.setImageResource(R.drawable.bike);
+            }
+            holder.text1.setText(final_list.get(position).get("distance").toString());
+            holder.text.setText(final_list.get(position).get("html_instructions").toString());
+            return v;
+        }
+        class Holder{
+            ImageView image;
+            TextView text;
+            TextView text1;
+        }
+    }
+
+    private void sendRequest(String origin, String destination) {
         // Setup request parameters
         //String origin = "24.784931,120.991764";
         //String origin = "台南車站";
-        String origin = "24.800305,120.994376";
+        origin = "300新竹市東區新源街138號";
         //String destination = "24.800164,120.979457";
-        String destination = "300台灣新竹市東區大學路68號";
-        //String destination = "24.789403,120.999980";
+        //tring destination = "300台灣新竹市東區大學路68號";
+        destination = "300新竹市東區大學路200號";
         String travel_mode = "transit";
-        String departure_time = "now";
+        //String departure_time = "now";
+        String departure_time = "1491771600";
         String language = "zh-TW";
 
         // Build request url
         Uri.Builder builder = Uri.parse(dir_api).buildUpon();
         builder.appendQueryParameter("origin", origin)
                 .appendQueryParameter("destination", destination)
-                .appendQueryParameter("mode", travel_mode)
                 .appendQueryParameter("departure_time", departure_time)
+                .appendQueryParameter("mode", travel_mode)
                 .appendQueryParameter("language", language)
                 .appendQueryParameter("key", key);
         String url = builder.build().toString();
@@ -106,6 +408,8 @@ public class MainActivity extends AppCompatActivity {
             overall.put("start_address", start_address);
             overall.put("end_address", end_address);
             overall.put("duration", duration);
+            overall.put("start_location", start_location);
+            overall.put("end_location", end_location);
 
             Log.v("JSON", start_location.toString());
             Log.v("JSON", end_location.toString());
@@ -146,6 +450,7 @@ public class MainActivity extends AppCompatActivity {
                                     .getJSONObject(j)
                                     .getJSONObject("distance")
                                     .getString("text");
+                            index.put("distance", distance);
                             // Get/Form html instructions
                             if (step_index.getJSONObject(j).has("html_instructions")) {
                                 String html_instructions = step_index
@@ -155,18 +460,15 @@ public class MainActivity extends AppCompatActivity {
                                 html_instructions = html_instructions
                                         .replaceAll("(?m)^[ \t]*\r?\n", "")
                                         .replaceAll("開", "走");
-                                html_instructions = html_instructions
-                                        .concat(System.getProperty("line.separator"))
-                                        .concat(distance);
                                 index.put("html_instructions", html_instructions);
                             } else {
                                 String html_instructions = steps
                                         .getJSONObject(i)
                                         .getString("html_instructions");
+                                html_instructions = Html.fromHtml(html_instructions).toString();
                                 html_instructions = html_instructions
                                         .replaceAll("(?m)^[ \t]*\r?\n", "")
                                         .replaceAll("開", "走");
-                                html_instructions = Html.fromHtml(html_instructions).toString();
                                 index.put("html_instructions", html_instructions);
                             }
 
@@ -182,9 +484,7 @@ public class MainActivity extends AppCompatActivity {
                                     .getJSONObject("polyline")
                                     .getString("points");
                             route_polyline.add(points);
-
                             route_list.add(index);
-                            //Log.v("LOOP", Integer.toString(j));
                         }
                     } else {
                         Map<String, Object> index = new HashMap<>();
@@ -193,15 +493,13 @@ public class MainActivity extends AppCompatActivity {
                                 .getJSONObject(i)
                                 .getJSONObject("distance")
                                 .getString("text");
+                        index.put("distance", distance);
 
                         // Get html instructions
                         String html_instructions = steps
                                 .getJSONObject(i)
                                 .getString("html_instructions");
                         html_instructions = Html.fromHtml(html_instructions).toString();
-                        html_instructions = html_instructions
-                                .concat(System.getProperty("line.separator"))
-                                .concat(distance);
                         html_instructions = html_instructions
                                 .replaceAll("(?m)^[ \t]*\r?\n", "")
                                 .replaceAll("開", "走");
@@ -217,7 +515,6 @@ public class MainActivity extends AppCompatActivity {
                                 .getJSONObject("polyline")
                                 .getString("points");
                         route_polyline.add(points);
-
                         route_list.add(index);
                     }
                 } else if (steps.getJSONObject(i).getString("travel_mode").equals("TRANSIT")) {
@@ -233,6 +530,7 @@ public class MainActivity extends AppCompatActivity {
                                     .getJSONObject(j)
                                     .getJSONObject("distance")
                                     .getString("text");
+                            index.put("distance", distance);
 
                             String departure_time = transit_details
                                     .getJSONObject("departure_time")
@@ -254,9 +552,6 @@ public class MainActivity extends AppCompatActivity {
                                     .append("到")
                                     .append(arrival_stop);
                             String html_instructions = instructions.toString();
-                            html_instructions = html_instructions
-                                    .concat(System.getProperty("line.separator"))
-                                    .concat(distance);
                             index.put("html_instructions", html_instructions);
 
                             String travel_mode = transit_details
@@ -270,7 +565,6 @@ public class MainActivity extends AppCompatActivity {
                                     .getJSONObject("polyline")
                                     .getString("points");
                             route_polyline.add(points);
-
                             route_list.add(index);
                         }
                     } else {
@@ -283,6 +577,7 @@ public class MainActivity extends AppCompatActivity {
                                 .getJSONObject(i)
                                 .getJSONObject("distance")
                                 .getString("text");
+                        index.put("distance", distance);
 
                         String departure_time = transit_details
                                 .getJSONObject("departure_time")
@@ -304,9 +599,6 @@ public class MainActivity extends AppCompatActivity {
                                 .append("到")
                                 .append(arrival_stop);
                         String html_instructions = instructions.toString();
-                        html_instructions = html_instructions
-                                .concat(System.getProperty("line.separator"))
-                                .concat(distance);
                         index.put("html_instructions", html_instructions);
 
                         String travel_mode = transit_details
@@ -320,12 +612,11 @@ public class MainActivity extends AppCompatActivity {
                                 .getJSONObject("polyline")
                                 .getString("points");
                         route_polyline.add(points);
-
                         route_list.add(index);
                     }
                 }
             }
-            ubikeOpt();
+            ubikePartOpt();
         } catch (JSONException e) {
             try {
                 String start_id = new JSONObject(data)
@@ -363,7 +654,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
-
 
     private String getUbikeGps(LatLng location) {
         DatabaseHelper myDbHelper = new DatabaseHelper(MainActivity.this);
@@ -403,7 +693,11 @@ public class MainActivity extends AppCompatActivity {
         return (resultLatitude + "," + resultLongitude);
     }
 
-    private void ubikeOpt() {
+    private void ubikeFullOpt() {
+
+    }
+
+    private void ubikePartOpt() {
         LatLng start_location = (LatLng) steps_list.get(0).get("start_location");
         LatLng end_location = (LatLng) steps_list.get(0).get("end_location");
 
@@ -477,14 +771,12 @@ public class MainActivity extends AppCompatActivity {
                                     .getJSONObject(j)
                                     .getJSONObject("distance")
                                     .getString("text");
+                            index.put("distance", distance);
 
                             String html_instructions = steps
                                     .getJSONObject(j)
                                     .getString("html_instructions");
                             html_instructions = Html.fromHtml(html_instructions).toString();
-                            html_instructions = html_instructions
-                                    .concat(System.getProperty("line.separator"))
-                                    .concat(distance);
                             html_instructions = html_instructions
                                     .replaceAll("(?m)^[ \t]*\r?\n", "")
                                     .replaceAll("開", "走");
@@ -548,13 +840,11 @@ public class MainActivity extends AppCompatActivity {
                                     .getJSONObject(j)
                                     .getJSONObject("distance")
                                     .getString("text");
+                            index.put("distance", distance);
                             String html_instructions = steps
                                     .getJSONObject(j)
                                     .getString("html_instructions");
                             html_instructions = Html.fromHtml(html_instructions).toString();
-                            html_instructions = html_instructions
-                                    .concat(System.getProperty("line.separator"))
-                                    .concat(distance);
                             html_instructions = html_instructions
                                     .replaceAll("(?m)^[ \t]*\r?\n", "")
                                     .replaceAll("開", "騎")
@@ -614,13 +904,11 @@ public class MainActivity extends AppCompatActivity {
                                     .getJSONObject(j)
                                     .getJSONObject("distance")
                                     .getString("text");
+                            index.put("distance", distance);
                             String html_instructions = steps
                                     .getJSONObject(j)
                                     .getString("html_instructions");
                             html_instructions = Html.fromHtml(html_instructions).toString();
-                            html_instructions = html_instructions
-                                    .concat(System.getProperty("line.separator"))
-                                    .concat(distance);
                             html_instructions = html_instructions
                                     .replaceAll("(?m)^[ \t]*\r?\n", "")
                                     .replaceAll("開", "走");
@@ -666,13 +954,21 @@ public class MainActivity extends AppCompatActivity {
             for (int i = 0; i < (Integer) steps_list.get(0).get("count"); i++) {
                 final_list.add(route_list.get(0));
                 final_polyline.add(route_polyline.get(0));
-                route_list.remove(0);
-                route_polyline.remove(0);
             }
         }
+        for (int i = 0; i < (Integer) steps_list.get(0).get("count"); i++) {
+            route_list.remove(0);
+            route_polyline.remove(0);
+        }
         steps_list.remove(0);
+        for (int i = 0; i < steps_list.size(); i++) {
+            for (Map.Entry entry : steps_list.get(i).entrySet()) {
+                Log.v("DATA", entry.getValue().toString());
+            }
+        }
+        Log.v("DATA", "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");
         if (steps_list.size() == 0) printList();
-        else ubikeOpt();
+        else ubikePartOpt();
     }
 
     private void errorMsg(String title, String content) {
@@ -692,6 +988,7 @@ public class MainActivity extends AppCompatActivity {
     protected void printList() {
         //Log.v("DATA", Integer.toString(route_list.size()));
         //Log.v("DATA", "HEY");
+        /*
         for (Map.Entry entry : overall.entrySet()) {
             Log.v("DATA", entry.getValue().toString());
         }
@@ -702,7 +999,9 @@ public class MainActivity extends AppCompatActivity {
         }
         for (int i = 0; i < final_polyline.size(); i++) {
             Log.v("DATA", final_polyline.get(i));
-        }
+        }*/
+        mListView.setAdapter(new MyAdapter());
+        mListView.setVisibility(View.VISIBLE);
     }
 
 }
