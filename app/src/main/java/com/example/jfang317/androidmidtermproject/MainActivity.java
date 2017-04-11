@@ -21,6 +21,7 @@ import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.BaseAdapter;
 import android.widget.Button;
 import android.widget.EditText;
@@ -51,14 +52,15 @@ public class MainActivity extends AppCompatActivity {
     private Button btnshowmap= null;
     private EditText editLocation1 = null;
     private EditText editLocation2 = null;
-
     private String location_txt;
     private String start_txt;
     private String end_txt;
-
     private ListView mListView;
+
+    // For receiving GPS data
     private BroadcastReceiver broadcastReceiver;
 
+    // Check if "使用目前位置" button pressed
     private boolean flag1 = false;
     private boolean flag2 = false;
 
@@ -70,12 +72,13 @@ public class MainActivity extends AppCompatActivity {
     protected ArrayList<Map<String, Object>> route_list = new ArrayList<>(); // Raw data from Google direction api
     protected ArrayList<Map<String, Object>> steps_list = new ArrayList<>(); // Store data for specific travel mode
     protected ArrayList<Map<String, Object>> ubike_list = new ArrayList<>(); // Route for Ubike
-    protected ArrayList<Map<String, Object>> final_list = new ArrayList<>(); // Optimized by adding ubike station database
-    protected Map<String, Object> overall = new HashMap<>();
-    protected ArrayList<String> route_polyline = new ArrayList<>();
-    protected ArrayList<String> ubike_polyline = new ArrayList<>();
-    protected ArrayList<String> final_polyline = new ArrayList<>();
+    protected ArrayList<Map<String, Object>> final_list = new ArrayList<>(); // Optimized result by adding ubike station database
+    protected Map<String, Object> overall = new HashMap<>(); // Raw overall traveling data
+    protected ArrayList<String> route_polyline = new ArrayList<>(); // polyline set of raw data
+    protected ArrayList<String> ubike_polyline = new ArrayList<>(); // polyline set of ubike route
+    protected ArrayList<String> final_polyline = new ArrayList<>(); // polyline set of final optimized route
 
+    // Cursor for ubike database
     Cursor c = null;
 
     @Override
@@ -83,6 +86,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // Specify ID for layout components
         editLocation1 = (EditText) findViewById(R.id.editText1);
         btnGetLocation1 = (Button) findViewById(R.id.button);
         editLocation2 = (EditText) findViewById(R.id.editText2);
@@ -91,11 +95,13 @@ public class MainActivity extends AppCompatActivity {
         mListView = (ListView) findViewById(R.id.list);
         mListView.setVisibility(View.INVISIBLE);
 
-        if(!runtime_permissions())
-            enable_gps();
+        // Ask for permission of GPS for this app, enable it
+        if(!runtime_permissions()) enable_gps();
     }
 
+    // onclick button "搜尋"
     public void search(View view) {
+        // Clear out all the global variable
         route_list.clear();
         steps_list.clear();
         ubike_list.clear();
@@ -104,35 +110,61 @@ public class MainActivity extends AppCompatActivity {
         ubike_polyline.clear();
         final_polyline.clear();
         overall.clear();
+
+        // Get string from text box
         start_txt = editLocation1.getText().toString();
         end_txt = editLocation2.getText().toString();
 
+        // Hide the soft keyboard
+        if (view != null) {
+            InputMethodManager imm = (InputMethodManager)getSystemService(Context.INPUT_METHOD_SERVICE);
+            imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+        }
+
+        // Start the whole process
         sendRequest(start_txt, end_txt);
     }
 
-    public void showmap(View view){
+    // onclick button "地圖"
+    public void showmap(View view) {
+        // Declare MapsActivity.class
         Intent intent = new Intent(this, MapsActivity.class);
+
+        // Parameters to pass over to MapsActivity
         intent.putStringArrayListExtra("polyline", final_polyline);
+        ArrayList<String> travel_mode = new ArrayList<>();
+        for (int i = 0; i < final_list.size(); i++) {
+            travel_mode.add(final_list.get(i).get("travel_mode").toString());
+        }
+        intent.putStringArrayListExtra("travel_mode", travel_mode);
         Bundle bundle = new Bundle();
         LatLng start = (LatLng) overall.get("start_location");
         LatLng end = (LatLng) overall.get("end_location");
         bundle.putDouble("Lat", (start.latitude + end.latitude) / 2);
         bundle.putDouble("Lng", (start.longitude + end.longitude) / 2);
+
+        // Start MapsActivity
         startActivity(intent);
     }
 
+    // onclick button top "使用目前位置"
     public void buttonClick1(View view) {
         flag1 = true;
+        // Show GPS text on text box
         editLocation1.setText(location_txt);
     }
 
+    // onclick button bottom "使用目前位置"
     public void buttonClick2(View view) {
         flag2 = true;
+        // Show GPS text on text box
         editLocation2.setText(location_txt);
     }
 
+    // Results are showed in self-constructed layout
     private class MyAdapter extends BaseAdapter {
 
+        // Define size for adapter layout
         @Override
         public int getCount() {
             return final_list.size();
@@ -148,6 +180,7 @@ public class MainActivity extends AppCompatActivity {
             return 0;
         }
 
+        // Show the results in adapter
         @Override
         public View getView(int position, View convertView, ViewGroup parent) {
             View v = convertView;
@@ -162,6 +195,8 @@ public class MainActivity extends AppCompatActivity {
             } else {
                 holder = (Holder) v.getTag();
             }
+
+            // Set image
             if (final_list.get(position).get("travel_mode").equals("WALKING")) {
                 holder.image.setImageResource(R.drawable.walk);
             } else if (final_list.get(position).get("travel_mode").equals("BUS")) {
@@ -173,10 +208,13 @@ public class MainActivity extends AppCompatActivity {
             } else if (final_list.get(position).get("travel_mode").equals("BIKE")) {
                 holder.image.setImageResource(R.drawable.bike);
             }
+
+            // Set text
             holder.text1.setText(final_list.get(position).get("distance").toString());
             holder.text.setText(final_list.get(position).get("html_instructions").toString());
             return v;
         }
+
         class Holder{
             ImageView image;
             TextView text;
@@ -184,6 +222,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Get / Store GPS data
     @Override
     protected void onResume() {
         super.onResume();
@@ -198,6 +237,7 @@ public class MainActivity extends AppCompatActivity {
         registerReceiver(broadcastReceiver,new IntentFilter("location_update"));
     }
 
+    // Unregister GPS receiver
     @Override
     protected void onDestroy() {
         super.onDestroy();
@@ -206,11 +246,13 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Start GPS service
     private void enable_gps() {
         Intent i =new Intent(getApplicationContext(),GPS_Service.class);
         startService(i);
     }
 
+    // Ask for GPS permissions and build apk version
     private boolean runtime_permissions() {
         if(Build.VERSION.SDK_INT >= 23 && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED){
 
@@ -221,6 +263,7 @@ public class MainActivity extends AppCompatActivity {
         return false;
     }
 
+    // Check for GPS permissions
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -233,17 +276,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    // Form the main request for Google directions api
     private void sendRequest(String origin, String destination) {
         // Setup request parameters
-        //String origin = "24.784931,120.991764";
-        //String origin = "台南車站";
-        //origin = "300新竹市東區新源街138號";
-        //String destination = "24.800164,120.979457";
-        //tring destination = "300台灣新竹市東區大學路68號";
-        //destination = "302台灣新竹縣竹北市高鐵七路6號";
         String travel_mode = "transit";
         String departure_time = "now";
-        //String departure_time = "1491771600";
         String language = "zh-TW";
 
         // Build request url
@@ -266,6 +303,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    // Parse the responding JSON string
     private void parseJSON(String data) {
         try {
             // Create JSON Objects
@@ -277,33 +315,36 @@ public class MainActivity extends AppCompatActivity {
                     .getJSONObject(0);
             JSONArray steps = legs.getJSONArray("steps");
 
-            // Get and store start/end location data & total duration,
+            // Get and store start / end location / address data & total duration,
             LatLng start_location = new LatLng(legs.getJSONObject("start_location").optDouble("lat"),
                     legs.getJSONObject("start_location").optDouble("lng"));
             LatLng end_location = new LatLng(legs.getJSONObject("end_location").optDouble("lat"),
                     legs.getJSONObject("end_location").optDouble("lng"));
             String start_address = legs.getString("start_address");
             String end_address = legs.getString("end_address");
-            String duration = legs.getJSONObject("duration").getString("text");
 
             // store summary data
             overall.put("start_address", start_address);
             overall.put("end_address", end_address);
-            overall.put("duration", duration);
             overall.put("start_location", start_location);
             overall.put("end_location", end_location);
 
+            /*
             Log.v("JSON", start_location.toString());
             Log.v("JSON", end_location.toString());
             Log.v("JSON", start_address);
             Log.v("JSON", end_address);
+            */
 
-            // Handling different responding cases of JSON
+            // Parse the main route data
             for (int i = 0; i < steps.length(); i++) {
+                // Construct info. for steps_list first
                 Map<String, Object> steps_info = new HashMap<>();
 
+                // Get the duration for specific travel mode
                 int time = steps.getJSONObject(i).getJSONObject("duration").optInt("value");
 
+                // Get the start / end for specific travel mode
                 LatLng start = new LatLng(
                         steps.getJSONObject(i).getJSONObject("start_location").optDouble("lat"),
                         steps.getJSONObject(i).getJSONObject("start_location").optDouble("lng"));
@@ -311,29 +352,36 @@ public class MainActivity extends AppCompatActivity {
                         steps.getJSONObject(i).getJSONObject("end_location").optDouble("lat"),
                         steps.getJSONObject(i).getJSONObject("end_location").optDouble("lng"));
 
+                // Count the instruction quantity
                 int count;
                 if (steps.getJSONObject(i).has("steps")) {
                     count = steps.getJSONObject(i).getJSONArray("steps").length();
                 } else count = 1;
 
+                // Form by adding constructed info. into step_list
                 steps_info.put("duration", time);
                 steps_info.put("start_location", start);
                 steps_info.put("end_location", end);
                 steps_info.put("count", count);
                 steps_list.add(steps_info);
 
+                // Handling different responding cases of JSON
+                // If current travel_mode is walking
                 if (steps.getJSONObject(i).getString("travel_mode").equals("WALKING")) {
+                    // If current travel mode has several instructions
                     if (steps.getJSONObject(i).has("steps")) {
                         JSONArray step_index = steps.getJSONObject(i).getJSONArray("steps");
                         for (int j = 0; j < step_index.length(); j++) {
                             Map<String, Object> index = new HashMap<>();
 
+                            // Get the distance for current instruction
                             String distance = step_index
                                     .getJSONObject(j)
                                     .getJSONObject("distance")
                                     .getString("text");
                             index.put("distance", distance);
-                            // Get/Form html instructions
+
+                            // Get / Form html instructions
                             if (step_index.getJSONObject(j).has("html_instructions")) {
                                 String html_instructions = step_index
                                         .getJSONObject(j)
@@ -354,23 +402,26 @@ public class MainActivity extends AppCompatActivity {
                                 index.put("html_instructions", html_instructions);
                             }
 
-                            // Get travel mode
+                            // Get travel mode for current instruction
                             String travel_mode = step_index
                                     .getJSONObject(j)
                                     .getString("travel_mode");
                             index.put("travel_mode", travel_mode);
 
-                            // Get polyline
+                            // Get polyline for current instruction
                             String points = step_index
                                     .getJSONObject(j)
                                     .getJSONObject("polyline")
                                     .getString("points");
+
+                            // Form by adding constructed info. into route_polyline / route_list
                             route_polyline.add(points);
                             route_list.add(index);
                         }
                     } else {
                         Map<String, Object> index = new HashMap<>();
 
+                        // Get the distance for current instruction
                         String distance = steps
                                 .getJSONObject(i)
                                 .getJSONObject("distance")
@@ -387,19 +438,23 @@ public class MainActivity extends AppCompatActivity {
                                 .replaceAll("開", "走");
                         index.put("html_instructions", html_instructions);
 
-                        // Get travel mode
+                        // Get travel mode for current instruction
                         String travel_mode = steps.getJSONObject(i).getString("travel_mode");
                         index.put("travel_mode", travel_mode);
 
-                        // Get polyline
+                        // Get polyline for current instruction
                         String points = steps
                                 .getJSONObject(i)
                                 .getJSONObject("polyline")
                                 .getString("points");
+
+                        // Form by adding constructed info. into route_polyline / route_list
                         route_polyline.add(points);
                         route_list.add(index);
                     }
+                    // If current travel_mode is public transport
                 } else if (steps.getJSONObject(i).getString("travel_mode").equals("TRANSIT")) {
+                    // If current travel_mode has several instructions
                     if (steps.getJSONObject(i).has("steps")) {
                         JSONArray step_index = steps.getJSONObject(i).getJSONArray("steps");
                         for (int j = 0; j < step_index.length(); j++) {
@@ -408,12 +463,14 @@ public class MainActivity extends AppCompatActivity {
                                     .getJSONObject(j)
                                     .getJSONObject("transit_details");
 
-                            String distance = steps
+                            // Get the distance for current instruction
+                            String distance = step_index
                                     .getJSONObject(j)
                                     .getJSONObject("distance")
                                     .getString("text");
                             index.put("distance", distance);
 
+                            // Construct self-defined html instructions
                             String departure_time = transit_details
                                     .getJSONObject("departure_time")
                                     .getString("text");
@@ -436,16 +493,20 @@ public class MainActivity extends AppCompatActivity {
                             String html_instructions = instructions.toString();
                             index.put("html_instructions", html_instructions);
 
+                            // Get transit type for current instruction
                             String travel_mode = transit_details
                                     .getJSONObject("line")
                                     .getJSONObject("vehicle")
                                     .getString("type");
                             index.put("travel_mode", travel_mode);
 
+                            // Get polyline for current instruction
                             String points = step_index
                                     .getJSONObject(j)
                                     .getJSONObject("polyline")
                                     .getString("points");
+
+                            // Form by adding constructed info. into route_polyline / route_list
                             route_polyline.add(points);
                             route_list.add(index);
                         }
@@ -455,12 +516,14 @@ public class MainActivity extends AppCompatActivity {
                                 .getJSONObject(i)
                                 .getJSONObject("transit_details");
 
+                        // Get the distance for current instruction
                         String distance = steps
                                 .getJSONObject(i)
                                 .getJSONObject("distance")
                                 .getString("text");
                         index.put("distance", distance);
 
+                        // Construct self-defined html instructions
                         String departure_time = transit_details
                                 .getJSONObject("departure_time")
                                 .getString("text");
@@ -483,16 +546,20 @@ public class MainActivity extends AppCompatActivity {
                         String html_instructions = instructions.toString();
                         index.put("html_instructions", html_instructions);
 
+                        // Get transit type for current instruction
                         String travel_mode = transit_details
                                 .getJSONObject("line")
                                 .getJSONObject("vehicle")
                                 .getString("type");
                         index.put("travel_mode", travel_mode);
 
+                        // Get polyline for current instruction
                         String points = steps
                                 .getJSONObject(i)
                                 .getJSONObject("polyline")
                                 .getString("points");
+
+                        // Form by adding constructed info. into route_polyline / route_list
                         route_polyline.add(points);
                         route_list.add(index);
                     }
@@ -508,9 +575,14 @@ public class MainActivity extends AppCompatActivity {
                     Log.v("YO", entry.getValue().toString());
                 }
             }*/
+            // Begin optimization by adding ubike stations into route
             ubikePartOpt();
         } catch (JSONException e) {
             try {
+                // If responding JSON has a "ZERO_RESULT" state,
+                // it should still contain the encoded place id data within request text location.
+                // ( Notice that if request location is in (Lat,Lng) format, it will not encode )
+                // Resend the request on walking mode by suggestion with place id and (Lat,Lng)
                 if (flag1 && flag2) {
                     zeroResults(start_txt, end_txt);
                 } else if (!flag1 && flag2) {
@@ -548,6 +620,7 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    // Resend request on walkijng mode
     private void zeroResults(String start, String end) {
 
         Uri.Builder builder = Uri.parse(dir_api).buildUpon();
@@ -567,8 +640,10 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    // Search for the nearest ubike station
     private String getUbikeGps(LatLng location) {
         DatabaseHelper myDbHelper = new DatabaseHelper(MainActivity.this);
+        // if have db use it
         try {
             myDbHelper.createDataBase();
         } catch (IOException ioe) {
@@ -579,11 +654,15 @@ public class MainActivity extends AppCompatActivity {
         } catch (SQLException sqle) {
             throw sqle;
         }
+        //query the db from beginning.
         c = myDbHelper.query("YoubileInfo", null, null, null, null, null, null);
         String resultLongitude = null, resultLatitude = null;
         float minDist = 10000000;
+        // go to the first item.
         if (c.moveToFirst()) {
+            //get the whole db items.
             do {
+                //Using gps data to get what i want.
                 String ubikeLon = c.getString(1);
                 String ubikeLat = c.getString(2);
 
@@ -605,53 +684,52 @@ public class MainActivity extends AppCompatActivity {
         return (resultLatitude + "," + resultLongitude);
     }
 
-    private void ubikeFullOpt() {
-
-    }
-
+    // For a specific travel mode, find out if if can be rearranged by ubike
     private void ubikePartOpt() {
+        // Form start / end location string
         LatLng start_location = (LatLng) steps_list.get(0).get("start_location");
         LatLng end_location = (LatLng) steps_list.get(0).get("end_location");
-
         String start = Double.toString(start_location.latitude)
                 + "," + Double.toString(start_location.longitude);
         String end = Double.toString(end_location.latitude)
                 + "," + Double.toString(end_location.longitude);
 
+        // Fetch nearest ubike station according to start / end location
         String ubike_start = getUbikeGps(start_location);
         String ubike_end = getUbikeGps(end_location);
 
-        if (ubike_start.equals(ubike_end)) {/*
-            Log.d("UBIKE", ubike_start);
-            Log.d("UBIKE", ubike_end);
-            Log.d("UBIKE", Integer.toString((Integer) steps_list.get(0).get("count")));
-            for (int i = 0; i < steps_list.size(); i++) {
-                for (Map.Entry entry : steps_list.get(i).entrySet()) {
-                    Log.v("DATA", entry.getValue().toString());
-                }
-            }
-            for (int i = 0; i < route_list.size(); i++) {
-                for (Map.Entry entry : route_list.get(i).entrySet()) {
-                    Log.v("YO", entry.getValue().toString());
-                }
-            }*/
-
+        // If both ubike station are in the same location -> no use of optimization
+        if (ubike_start.equals(ubike_end)) {
             for (int i = 0; i < (Integer) steps_list.get(0).get("count"); i++) {
+                // Since steps_list has recorded the number of instructions of each travel modes,
+                // we can know that the first n list are for this travel mode.
+                // In order to get these info, I copied the first element into final then deleted it.
+                // By doing this in the number of loops,
+                // each time I get the first element is actually the next from the original list.
                 final_list.add(route_list.get(0));
                 final_polyline.add(route_polyline.get(0));
                 route_list.remove(0);
                 route_polyline.remove(0);
             }
+            // Remove data of this travel mode when finished updating final_list
             steps_list.remove(0);
 
+            // If no more travel mode to optimize, prepare to show the result
+            // Else do the function again until steps_list is empty
             if (steps_list.size() == 0) {
                 printList();
                 return;
             } else {
                 ubikePartOpt();
+                return;
             }
         }
 
+        // There are three requests required:
+        // 1. Walking from start location to ubike station
+        // 2. Cycling between ubike stations
+        // 3. Walking from ubike station to end location
+        // Below are the url constructors
         Uri.Builder builder1 = Uri.parse(dir_api).buildUpon();
         builder1.appendQueryParameter("origin", start)
                 .appendQueryParameter("destination", ubike_start)
@@ -684,12 +762,11 @@ public class MainActivity extends AppCompatActivity {
         url[1] = url2;
         url[2] = url3;
 
+        // Start sending requests, in order to keep the result, requests are synced
         walkingRequest1(url);
-
-        //Log.v("DATA", Double.toString(start.longitude));
-        //if (steps_list.size() == 0) printList();
     }
 
+    // First request, mostly same as parsJSON()
     private void walkingRequest1(final String[] url) {
         new JSONParser().getJSONFromUrl(url[0],new responseListener() {
             @Override
@@ -703,6 +780,7 @@ public class MainActivity extends AppCompatActivity {
                             .getJSONObject(0);
                     JSONArray steps = legs.getJSONArray("steps");
 
+                    // Store the duration data
                     int duration = legs.getJSONObject("duration").optInt("value");
 
                     for (int j = 0; j < steps.length(); j++) {
@@ -718,15 +796,6 @@ public class MainActivity extends AppCompatActivity {
 
                             String html_instructions = steps
                                     .getJSONObject(j)
-                                    .getString("html_instructions");
-                            html_instructions = Html.fromHtml(html_instructions).toString();
-                            html_instructions = html_instructions
-                                    .replaceAll("(?m)^[ \t]*\r?\n", "")
-                                    .replaceAll("開", "走");
-                            index.put("html_instructions", html_instructions);
-                        } else {
-                            String html_instructions = steps
-                                    .getJSONObject(0)
                                     .getString("html_instructions");
                             html_instructions = Html.fromHtml(html_instructions).toString();
                             html_instructions = html_instructions
@@ -749,6 +818,8 @@ public class MainActivity extends AppCompatActivity {
                         ubike_polyline.add(points);
                         ubike_list.add(index);
                     }
+
+                    // Send duration value to next request
                     walkingRequest2(url, duration);
                 } catch (JSONException e) {
                     Log.v("JSON", "2");
@@ -758,6 +829,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    // Second request, mostly same as parsJSON()
     private void walkingRequest2(final String[] url, final int time) {
         new JSONParser().getJSONFromUrl(url[1],new responseListener() {
             @Override
@@ -771,9 +843,9 @@ public class MainActivity extends AppCompatActivity {
                             .getJSONObject(0);
                     JSONArray steps = legs.getJSONArray("steps");
 
+                    // Assume that it is 3x faster then walking when cycling, add duration
                     int duration = time +
                             legs.getJSONObject("duration").optInt("value") / 3;
-                    Log.v("YO", Integer.toString(duration));
 
                     for (int j = 0; j < steps.length(); j++) {
                         Map<String, Object> index = new HashMap<>();
@@ -793,7 +865,7 @@ public class MainActivity extends AppCompatActivity {
                                     .replaceAll("開", "騎")
                                     .replaceAll("走", "騎");
                             index.put("html_instructions", html_instructions);
-                        } else {
+                        } /*else {
                             String html_instructions = steps
                                     .getJSONObject(0)
                                     .getString("html_instructions");
@@ -803,7 +875,7 @@ public class MainActivity extends AppCompatActivity {
                                     .replaceAll("開", "騎")
                                     .replaceAll("走", "騎");
                             index.put("html_instructions", html_instructions);
-                        }
+                        }*/
                         index.put("travel_mode", "BIKE");
                         // Get polyline
                         String points = steps
@@ -812,7 +884,6 @@ public class MainActivity extends AppCompatActivity {
                                 .getString("points");
                         ubike_polyline.add(points);
                         ubike_list.add(index);
-                        //Log.v("LOOP", Integer.toString(j));
                     }
                     walkingRequest3(url, duration);
                 } catch (JSONException e) {
@@ -823,6 +894,7 @@ public class MainActivity extends AppCompatActivity {
         });
     }
 
+    // Third request, mostly same as parsJSON()
     private void walkingRequest3(final String[] url, final int time) {
         new JSONParser().getJSONFromUrl(url[2],new responseListener() {
             @Override
@@ -856,7 +928,7 @@ public class MainActivity extends AppCompatActivity {
                                     .replaceAll("(?m)^[ \t]*\r?\n", "")
                                     .replaceAll("開", "走");
                             index.put("html_instructions", html_instructions);
-                        } else {
+                        } /*else {
                             String html_instructions = steps
                                     .getJSONObject(0)
                                     .getString("html_instructions");
@@ -865,7 +937,7 @@ public class MainActivity extends AppCompatActivity {
                                     .replaceAll("(?m)^[ \t]*\r?\n", "")
                                     .replaceAll("開", "走");
                             index.put("html_instructions", html_instructions);
-                        }
+                        }*/
                         // Get travel mode
                         String travel_mode = steps
                                 .getJSONObject(j)
@@ -878,8 +950,8 @@ public class MainActivity extends AppCompatActivity {
                                 .getString("points");
                         ubike_polyline.add(points);
                         ubike_list.add(index);
-                        //Log.v("LOOP", Integer.toString(j));
                     }
+                    // Pass duration in order to decide which traveling method is better
                     routeGen(duration);
                 } catch (JSONException e) {
                     Log.v("JSON", "4");
@@ -890,9 +962,12 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void routeGen(int time) {
+        // If riding ubike takes less time then current travel mode,
+        // update the final_list with ubike instructions
         if (time < (Integer) steps_list.get(0).get("duration")) {
             final_list.addAll(ubike_list);
             final_polyline.addAll(ubike_polyline);
+            // remove the original data of current travel mode
             for (int i = 0; i < (Integer) steps_list.get(0).get("count"); i++) {
                 route_list.remove(0);
                 route_polyline.remove(0);
@@ -905,24 +980,22 @@ public class MainActivity extends AppCompatActivity {
                 route_polyline.remove(0);
             }
         }
-        steps_list.remove(0);/*
-        for (int i = 0; i < steps_list.size(); i++) {
-            for (Map.Entry entry : steps_list.get(i).entrySet()) {
-                Log.v("DATA", entry.getValue().toString());
-            }
-        }
-        for (int i = 0; i < route_list.size(); i++) {
-            for (Map.Entry entry : route_list.get(i).entrySet()) {
-                Log.v("YO", entry.getValue().toString());
-            }
-        }
-        Log.v("DATA", "~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~");*/
+        // Remove data of this travel mode when finished updating final_list
+        steps_list.remove(0);
+
+        // If no more travel mode to optimize, prepare to show the result
+        // Else do the function again until steps_list is empty
         if (steps_list.size() == 0){
             printList();
+            return;
         }
-        else ubikePartOpt();
+        else {
+            ubikePartOpt();
+            return;
+        }
     }
 
+    // Show dialog when error occurs
     private void errorMsg(String title, String content) {
         new AlertDialog.Builder(this)
                 .setTitle(title)
@@ -938,8 +1011,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     protected void printList() {
-        //Log.v("DATA", Integer.toString(route_list.size()));
-        //Log.v("DATA", "HEY");
         /*
         for (Map.Entry entry : overall.entrySet()) {
             Log.v("DATA", entry.getValue().toString());
@@ -952,6 +1023,9 @@ public class MainActivity extends AppCompatActivity {
         for (int i = 0; i < final_polyline.size(); i++) {
             Log.v("DATA", final_polyline.get(i));
         }*/
+        // Reset flag when finished
+        flag1 = false; flag2 = false;
+        // Show adapter
         mListView.setAdapter(new MyAdapter());
         mListView.setVisibility(View.VISIBLE);
     }

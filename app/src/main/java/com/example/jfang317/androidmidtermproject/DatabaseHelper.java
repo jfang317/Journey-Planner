@@ -14,12 +14,12 @@ import java.io.InputStream;
 import java.io.OutputStream;
 
 public class DatabaseHelper extends SQLiteOpenHelper {
-
+    //prepare all variables.
     String DB_PATH = null;
     private static String DB_NAME = "AndroidProject";
     private SQLiteDatabase myDataBase;
     private final Context myContext;
-
+    //initialize dbhelper.
     public DatabaseHelper(Context context) {
         super(context, DB_NAME, null, 10);
         this.myContext = context;
@@ -40,7 +40,7 @@ public class DatabaseHelper extends SQLiteOpenHelper {
             }
         }
     }
-
+    //if have db on the assets if yes open it else create a db and copy the data.
     private boolean checkDataBase() {
         SQLiteDatabase checkDB = null;
         try {

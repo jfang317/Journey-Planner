@@ -32,29 +32,62 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mapFragment.getMapAsync(this);
     }
 
+    // Define map
     @Override
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
-
         showRoad();
     }
 
+    // Draw polyline
     private void showRoad() {
+        // Get the parameters from MainActivity
         Intent intent = getIntent();
         ArrayList<String> polyline = intent.getStringArrayListExtra("polyline");
+        ArrayList<String> travel_mode = intent.getStringArrayListExtra("travel_mode");
+
+        // Get the encoded format polyline
         List<LatLng> middlePath = PolyUtil.decode(polyline.get(polyline.size()/2));
+
+        // Move the map to the center of route by obtaining the middle-way (Lat,Lng)
         LatLng center = new LatLng(intent.getDoubleExtra("Lat",
                 middlePath.get(middlePath.size()/2).latitude),
                 intent.getDoubleExtra("Lng",
                 middlePath.get(middlePath.size()/2).longitude));
         mMap.moveCamera(CameraUpdateFactory.newLatLng(center));
+
+        // Zoom in the camera
         mMap.moveCamera(CameraUpdateFactory.newLatLngZoom(center, 15));
         for (int i = 0; i < polyline.size(); i++) {
+
+            // Decode and draw polyline
             List<LatLng> decodedPath = PolyUtil.decode(polyline.get(i));
-            mMap.addPolyline(new PolylineOptions()
-                    .addAll(decodedPath)
-                    .width(5)
-                    .color(Color.RED));
+            if (travel_mode.get(i).equals("WALKING")) {
+                mMap.addPolyline(new PolylineOptions()
+                        .addAll(decodedPath)
+                        .width(8)
+                        .color(Color.RED));
+            } else if (travel_mode.get(i).equals("BIKE")) {
+                mMap.addPolyline(new PolylineOptions()
+                        .addAll(decodedPath)
+                        .width(8)
+                        .color(Color.rgb(156, 39, 176)));
+            } else if (travel_mode.get(i).equals("BUS")) {
+                mMap.addPolyline(new PolylineOptions()
+                        .addAll(decodedPath)
+                        .width(8)
+                        .color(Color.GREEN));
+            } else if (travel_mode.get(i).equals("HEAVY_RAIL")) {
+                mMap.addPolyline(new PolylineOptions()
+                        .addAll(decodedPath)
+                        .width(8)
+                        .color(Color.BLUE));
+            } else {
+                mMap.addPolyline(new PolylineOptions()
+                        .addAll(decodedPath)
+                        .width(8)
+                        .color(Color.BLACK));
+            }
         }
     }
 }

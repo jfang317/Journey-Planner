@@ -13,6 +13,7 @@ public class JSONParser {
     public JSONParser() {
     }
 
+    // Open HTTP connection and catch the responding data
     public void getJSONFromUrl(final String url, final responseListener target) {
         new AsyncTask<Void, Void, String>() {
             protected String doInBackground(Void... params) {
@@ -46,6 +47,7 @@ public class JSONParser {
     }
 }
 
+// Store result when response completed
 interface responseListener{
     void onResponseComplete(String response);
 }
