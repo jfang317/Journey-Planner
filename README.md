@@ -9,7 +9,7 @@
 - Enter your origin and destination with names, street addresses or latitudes & longitudes. If you have no idea where you are, our app can locate your current place with GPS service.
 - Press the serach button and you&#39;ll get each step of route instructions with distance to your destination.
 - Our app supports Google Map results aswell, each travel mode is represented by a different color, as shown below:&nbsp;
-<font color="red">Walk</font>, <font color="purple">Bike</font>, <font color="green">Bus</font>, <font color="blue">Train</font>
+<font color="red">Walk - Red</font>, <font color="purple">Bike - Purple</font>, <font color="green">Bus - Green</font>, <font color="blue">Train - Blue</font>
 
 ------------
 ## Motivation
