@@ -1,4 +1,5 @@
 # Journey Planner
+https://github.com/jfang317/Journey-Planner
 
 #### Combining Google Maps directions API with Hsinchu Ubike station databse in order to make ease of finding the best journey between places.
 ------------
