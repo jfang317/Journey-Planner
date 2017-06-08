@@ -3,7 +3,7 @@ https://github.com/jfang317/Journey-Planner
 
 #### Combining Google Maps directions API with Hsinchu Ubike station databse in order to make ease of finding the best journey between places.
 ------------
-<img src="https://www.dropbox.com/s/3pvctmie83irkfa/Screenshot_2017-04-13-19-35-05.png?raw=1"  width="200"/> <img src="https://www.dropbox.com/s/ez35d2eymo6p2i2/Screenshot_2017-04-13-19-35-27.png?raw=1"  width="200"/> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://www.dropbox.com/s/848q1ze3hethqd4/Screenshot_2017-04-13-18-08-19.png?raw=1"  width="200"/> <img src="https://www.dropbox.com/s/8brogsh18o6tx0t/Screenshot_2017-04-13-18-08-13.png?raw=1"  width="200"/>
+<img src="https://preview.ibb.co/mv3PdF/Screenshot_2017_04_13_19_35_05.png"  width="200"/> <img src="https://preview.ibb.co/bQXZdF/Screenshot_2017_04_13_18_08_13.png"  width="200"/> &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<img src="https://preview.ibb.co/mv3PdF/Screenshot_2017_04_13_19_35_05.png"  width="200"/> <img src="https://preview.ibb.co/m46zCa/Screenshot_2017_04_13_19_35_27.png"  width="200"/>
 
 ------------
 ## Usage
@@ -20,8 +20,7 @@ https://github.com/jfang317/Journey-Planner
 
 ------------
 ## Structure
-<img src="https://www.dropbox.com/s/jblzwgnd2zprsja/app%20structure.PNG?raw=1"  width="700"/>
-
+<img src="https://preview.ibb.co/myHsyF/app_structure.png"  width="700"/>
 
 ------------
 ## API Reference
